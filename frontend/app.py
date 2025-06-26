@@ -1,94 +1,102 @@
+import io
+import json
 import streamlit as st
 from streamlit.delta_generator import DeltaGenerator
+from streamlit_extras.pdf_viewer import pdf_viewer
 import requests
 
-UPLOAD_URL = ""
-RESPONSE_URL = ""
+UPLOAD_URL = "http://0.0.0.0:3000/classify-docs"
+EXTRACTION_URL = "http://0.0.0.0:3000/extraction"
 
-uploaded = st.file_uploader("Upload resume/email/scientific PDF/image",  type=["pdf","png","jpg","jpeg"])
+st.set_page_config(page_title="📝 Document Processor", layout="wide")
+_ = st.title("📝 Document Classifier and Extractor")
 
-if not uploaded:
-    st.stop()
+_ = st.subheader("📤 Upload your document")
+uploaded = st.file_uploader(
+    "Upload resume/email/scientific PDF/image",
+    help="upload only images or convert pdf to img",
+    type=["png", "jpg", "jpeg"],
+)
 
-if st.button("Start processing"):
-    files = {"file": (
-        uploaded.name,  # pyright: ignore[reportAny]
-        uploaded, 
-        uploaded.type
-    )}
-    try:
-        with st.spinner("Starting job..."):
-            response = requests.post("http://localhost:8000/start-job", files=files, timeout=10)
+if uploaded:
+    file_bytes = uploaded.read()
+    file_type = uploaded.type
 
-        if response.status_code == 200:
-            _ = st.toast("✅ Job started successfully", icon="🎉")
-            st.session_state.started = True
-        else:
-            _ = st.toast("❌ Failed to start job", icon="⚠️")
-            _ =st.error(f"Status: {response.status_code}\nMessage: {response.text}")
+    _ = st.markdown("### 📄 Document Preview")
+    if "image" in file_type:
+        _ = st.image(file_bytes, caption=uploaded.name, use_container_width=True)  # pyright: ignore[reportAny]
+    elif "pdf" in file_type:
+        pdf_viewer(data=file_bytes, width=None, height=600)
+    else:
+        _ = st.warning("Unsupported file type.")
 
-    except requests.exceptions.Timeout:
-        _ = st.toast("⏳ Request timed out", icon="⏱️")
-        _ = st.error("The request timed out. Please try again.")
+    if st.button("🚀 Start Processing"):
+        try:
+            with st.spinner("Starting classification..."):
+                files = {
+                    "files": (uploaded.name, io.BytesIO(file_bytes), uploaded.type)  # pyright: ignore[reportAny]
+                }
+                response = requests.post(UPLOAD_URL, files=files, timeout=60)
+                response.raise_for_status()
 
-    except requests.exceptions.ConnectionError:
-        _ = st.toast("🔌 Backend unreachable", icon="❌")
-        _ = st.error("Could not connect to the backend. Is it running?")
+                result = response.json()  # pyright: ignore[reportAny]
+                doc_id: str = result["doc_id"]  # pyright: ignore[reportAny]
+                doc_type: str = result["type"]  # pyright: ignore[reportAny]
 
-    except Exception as e:
-        _ = st.toast("🚨 Unknown error occurred", icon="🚨")
-        _ = st.exception(e)
+                if doc_type == "None":
+                    _ = st.error("❌ Unable to classify the document.")
+                    st.stop()
+
+                _ = st.success(f"✅ Classified as: **{doc_type.upper()}**")
+                _ = st.toast("Classification complete 🎯", icon="✅")
+
+                st.session_state.doc_id = doc_id
+                st.session_state.doc_type = doc_type
+                st.session_state.polling = True  # enable polling
+
+        except Exception as e:
+            _ = st.error(f"🚨 Error: {str(e)}")
+            st.stop()
 
 
-if not st.session_state.get("started", False):
-    _ = st.info("Hit ▶️ to start classification / extraction")
-    st.stop()
+status_placeholder = st.empty()
+result_placeholder = st.empty()
 
-# Placeholders for status
-class_ph = st.empty()
-extract_ph = st.empty()
 
-# @st.fragment(run_every=10)  # poll every 10s
-# def poll_classification(ph: DeltaGenerator):
-#     resp = requests.get(UPLOAD_URL).json()
-#     status = resp["status"]  # "pending" or "done"
-#     if status != "done":
-#         ph.info(f"🔎 Classifying… ({resp.get('progress','0%')})")
-#     else:
-#         st.session_state.doc_type = resp["doc_type"]
-#         st.session_state.classified = True
-#         # Stop fragment polling and trigger full rerun
-#         st.rerun(scope="app")
+if st.session_state.get("polling", False):
 
-# if not st.session_state.get("classified", False):
-#     poll_classification(class_ph)
-#     st.stop()
+    @st.fragment(run_every=5)  # 🔥 Poll every 5 seconds
+    def poll_extraction(ph: DeltaGenerator):
+        doc_id = st.session_state.doc_id  # pyright: ignore[reportAny]
+        doc_type = st.session_state.doc_type  # pyright: ignore[reportAny]
 
-# if st.session_state.doc_type == "None":
-#     st.error("❌ Unrecognized document—please upload a valid one.")
-#     st.stop()
+        poll_url = f"{EXTRACTION_URL}/{doc_type}/{doc_id}"
 
-# st.success(f"✅ Classified as: {st.session_state.doc_type}")
+        try:
+            response = requests.get(poll_url, timeout=10)
 
-# @st.fragment(run_every=10)  # poll every 10s
-# def poll_extraction(ph: DeltaGenerator):
-#     resp = requests.get(RESPONSE_URL, params={"type": st.session_state.doc_type}).json()
-#     if not resp["done"]:
-#         ph.info(f"🛠️ Extracting info… ({resp.get('progress','0%')})")
-#     else:
-#         # Final data arrived—render UI for this doc_type
-#         data = resp["extracted"]
-#         if st.session_state.doc_type == "resume":
-#             st.subheader("👤 Candidate Profile")
-#             st.write(data["name"], data["email"], data["skills"])
-#         elif st.session_state.doc_type == "email":
-#             st.subheader("✉️ Email Metadata")
-#             st.write(data["from"], data["to"], data["subject"])
-#         else:  # scientific publication
-#             st.subheader("📑 Publication Details")
-#             st.write(data["title"], data["authors"], data["abstract"])
-#         ph.empty()  # clear spinner
-#         # Extraction done: stop this fragment
-#         st.rerun(scope="app")
+            if response.status_code == 200:
+                _ = st.toast("✅ Extraction complete", icon="🎉")
+                data = response.json()["extraction_results"]  # pyright: ignore[reportAny]
 
-# poll_extraction(extract_ph)
+                _ = ph.success("🎯 Extraction complete!")
+
+                with ph.expander("📦 Extraction JSON"):
+                    _ = ph.json(data)  # pyright: ignore[reportAny]
+
+                _ = ph.code(json.dumps(data, indent=4), language="json")
+
+                st.session_state.polling = False  # 🛑 Stop polling after success
+                st.rerun(scope="app")  # 🔄 Trigger rerun to clean polling UI
+
+            elif response.status_code == 404:
+                _ = ph.info("⏳ Extraction in progress...")
+            else:
+                _ = ph.error(f"❌ Error: {response.status_code} — {response.text}")
+                st.session_state.polling = False
+
+        except Exception as e:
+            _ = ph.error(f"🚨 Exception: {str(e)}")
+            st.session_state.polling = False
+
+    poll_extraction(status_placeholder)

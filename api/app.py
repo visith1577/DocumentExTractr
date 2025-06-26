@@ -1,3 +1,4 @@
+from logging import Logger
 from uuid import uuid4
 from pydantic import UUID4
 from starlette.status import (
@@ -18,6 +19,7 @@ app = FastAPI()
 settings = get_settings()
 inmemory_doc_cache: dict[str, str] = {}
 extractor = Extractor()
+logger = Logger(name="main-api-logger")
 
 
 async def call_structured_ocr_and_cache(
@@ -28,9 +30,10 @@ async def call_structured_ocr_and_cache(
     try:
         async with httpx.AsyncClient() as client:
             response = await client.post(
-                f"http://localhost:3002/structured-ocr/{doc_type}",
+                f"http://0.0.0.0:3002/structured-ocr/{doc_type}",
                 files=files_data,
             )
+            logger.info(f"ocr structured output: {response.json()}")
             status = response.raise_for_status().status_code
             if status != 200:
                 raise HTTPException(
@@ -40,6 +43,7 @@ async def call_structured_ocr_and_cache(
             ocr_output = ocr_response.ocr_output
             inmemory_doc_cache[str(doc_id)] = ocr_output
     except Exception as e:
+        logger.warning(f"error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(e)}")
 
 
@@ -59,9 +63,10 @@ async def doc_classifier(
             ]
             async with httpx.AsyncClient() as client:
                 ocr_response = await client.post(
-                    "http://localhost:3002/ocr",
+                    "http://0.0.0.0:3002/ocr",
                     files=files_data,
                 )
+                logger.info(f"ocr response: {ocr_response.json()}")
                 status = ocr_response.raise_for_status().status_code
                 ocr_response = OcrResponse(**ocr_response.json())  # pyright: ignore[reportAny]
                 ocr_result = ocr_response.ocr_output
@@ -77,12 +82,14 @@ async def doc_classifier(
             )
 
         document_type = classify_document_text(ocr_result)
+        logger.info(f"document type: {document_type}")
         background_tasks.add_task(
             call_structured_ocr_and_cache, doc_id, document_type, files_data
         )
 
         return ClassifyResponse(doc_id=doc_id, type=document_type)
     except Exception as e:
+        logger.warning(f"error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(e)}")
 
 
@@ -94,11 +101,12 @@ async def retrieve_extraction(doc_type: str, doc_id: UUID4):
             raise HTTPException(status_code=404, detail="Extraction not ready")
 
         extraction = extractor.get_extraction(doc_type, ocr_output) # pyright: ignore[reportUnknownVariableType]
-
+        logger.info(f"document extraction results: {extraction}")
         return ExtractResponse(
             document_type="document", extraction_results=extraction # pyright: ignore[reportArgumentType]
         )
     except Exception as e:
+        logger.warning(f"error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(e)}")
 
 

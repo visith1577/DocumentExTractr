@@ -10,7 +10,9 @@ ocr = PaddleOCR(
     use_textline_orientation=True
 )
 
-pipeline = PPStructureV3()
+pipeline = PPStructureV3(
+    use_chart_recognition=False # this model is deactivated for easier setup
+)
 
 def apply_ocr(examples: list[str]) -> list[str]:
     words: list[str] = []

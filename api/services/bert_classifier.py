@@ -3,12 +3,12 @@ import torch
 
 IDX2LABEL: dict[int, str] = {0: "resume", 1: "email", 2: "scientific_publication"}
 
-tokenizer: BertTokenizer = BertTokenizer.from_pretrained(
+tokenizer: BertTokenizer = BertTokenizer.from_pretrained( # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
     "visithck/Bert-Based-Docu-classify"
-)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType]
-model: BertForSequenceClassification = BertForSequenceClassification.from_pretrained(
+)  
+model: BertForSequenceClassification = BertForSequenceClassification.from_pretrained( # pyright: ignore[reportUnknownMemberType]
     "visithck/Bert-Based-Docu-classify", num_labels=3
-)  # pyright: ignore[reportUnknownMemberType]
+)  
 
 if torch.mps.is_available():
     device = torch.device("mps")

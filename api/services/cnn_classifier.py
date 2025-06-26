@@ -15,9 +15,9 @@ def predict_image_class(
         image_path, target_size=(img_height, img_width)
     )
     img_array = keras.utils.img_to_array(img)  # pyright: ignore[reportUnknownMemberType, reportUnknownArgumentType]
-    img_array = tf.expand_dims(
+    img_array = tf.expand_dims(  # Create a batch  # pyright: ignore[reportUnknownMemberType, reportAny]
         img_array, 0
-    )  # Create a batch  # pyright: ignore[reportUnknownMemberType, reportAny]
+    ) 
 
     predictions = model.predict(img_array)  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType, reportAny]
     score = tf.nn.softmax(predictions[0])  # pyright: ignore[reportUnknownMemberType, reportUnknownVariableType, reportUnknownArgumentType]

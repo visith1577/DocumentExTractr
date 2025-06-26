@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     model_url: str = "http://localhost:11434"
     model_api_key: str = ""
-    model_name: str = "qwen3:4b"
+    model_name: str = "ollama_chat/qwen3:4b"
     model_provider: Literal["openai", "anthropic", "local"] = "local"
     database_url: str = ""
     hf_token: str = ""

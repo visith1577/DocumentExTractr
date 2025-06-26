@@ -1,0 +1,6 @@
+notebooks/models/layoutlmv3
+notebooks/output
+output-structured
+.venv
+.env
+typings

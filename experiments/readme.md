@@ -1,0 +1,1 @@
+# [spacy installation guidlines](https://spacy.io/usage)

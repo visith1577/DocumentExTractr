@@ -1,0 +1,11 @@
+ipykernel
+kagglehub
+transformers
+numpy
+datasets
+torch
+scikit-learn
+pillow
+paddleocr
+spacy
+dspy
